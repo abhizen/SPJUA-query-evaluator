@@ -1,0 +1,220 @@
+package edu.buffalo.cse562;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+import net.sf.jsqlparser.expression.*;
+import net.sf.jsqlparser.statement.Statement;
+import edu.buffalo.cse562.Operators.Operator;
+import edu.buffalo.cse562.RATree.*;
+import edu.buffalo.cse562.SqlParser.*;
+import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
+import net.sf.jsqlparser.statement.create.table.CreateTable;
+import net.sf.jsqlparser.statement.select.*;
+
+public class Main {
+
+    public static void main(String[] args) {
+
+        ArrayList<File> sqlFiles = new ArrayList<File>();
+        //File nba = new File("NBA_Examples");
+        //File sanity = new File("Sanity_Check_Examples");
+
+        //File[] nbaFiles = nba.listFiles();
+        //File[] sanityFiles = sanity.listFiles();
+        HashMap<String, File> fileMap = new HashMap<String, File>();
+        SelectBody sb = null;
+        //CreateTable ct = null;
+        //Union un = null;
+        HashMap<String, HashMap<String, ArrayList<Object>>> selectMap = null;
+        //ArrayList<HashMap<String,HashMap<String, ArrayList<Object>>>> unionMap = null;
+        //HashMap<String, ArrayList<Object>> createMap = null;
+        //LoadOperators lOpt = null;
+        QueryPlan qPlan = new QueryPlan();
+        RATree raTree = null;
+        ArrayList<RATree> treeList = null;
+        //String stmtKey = null;
+        long start = System.nanoTime();
+        File dataDir = null;
+        //Needs to be added later
+         for (int i = 0; i < args.length; i++) {
+	         if (args[i].equals("--data")) {
+	        	 dataDir = new File(args[i+1]);
+	        	 i++;
+	         } else {
+	        	 sqlFiles.add(new File(args[i]));
+	         }
+         }
+        //Contains map of tables and their data files
+        //File datadir = new File("datadir");
+
+        for (File data : dataDir.listFiles()) {
+            if (data.getName().endsWith(".tbl") || data.getName().endsWith(".dat")) {
+                fileMap.put(data.getName().substring(0, data.getName().lastIndexOf('.')), data);
+            }
+        }
+
+        //Contains CREATE/SELECT, parsedtable/parsed select pair
+        HashMap<String, HashMap<String, Object>> queryMap = new HashMap<String, HashMap<String, Object>>();
+
+        //Contains Table name, schema(@Overridden to string) pair
+        HashMap<String, TablesO> parsedTables = new HashMap<>();
+
+        /*for (File sql : nbaFiles) {
+            if (sql.getName().endsWith(".sql") || sql.getName().endsWith(".SQL")) {
+                sqlFiles.add(sql);
+            }
+        }
+        for (File sql : sanityFiles) {
+            if (sql.getName().endsWith(".sql") || sql.getName().endsWith(".SQL")) {
+                sqlFiles.add(sql);
+            }
+        }*/
+
+        //int tcount = 0;
+        ArrayList<Statement> stmtList = null;
+        QueryParser qp = new QueryParser();
+        for (File sql : sqlFiles) {
+            if (stmtList == null) {
+                stmtList = qp.readQueries(sql);
+            } else {
+                stmtList.addAll(qp.readQueries(sql));
+            }
+        }
+
+        Main obj1 = new Main();
+        treeList = new ArrayList<RATree>();
+        for (Statement stmt : stmtList) {
+            if (stmt instanceof Select) {
+                sb = ((Select) stmt).getSelectBody();
+                if (!(sb instanceof Union)) {
+                	selectMap = qp.parseSelect("S0", sb);
+                    obj1.printMap(selectMap);
+                    LoadOperators obj = new LoadOperators();
+                    raTree = obj.load(selectMap);
+                    treeList.add(raTree);
+                    //qPlan.trav(raTree.getRoot());
+                } else if (sb instanceof Union) {
+             	   ArrayList<PlainSelect> psList = (ArrayList<PlainSelect>) (((Union) sb).getPlainSelects());
+             	   if (psList.size() < 2) {
+             		   System.out.println("Invalid PlainSelects found in Union: " + sb);
+             	   } else {
+             		   for (PlainSelect ps : psList) {
+                		   selectMap = qp.parseSelect("S0", (SelectBody) ps);
+                		   obj1.printMap(selectMap);
+                		   LoadOperators obj = new LoadOperators();
+                		   raTree = obj.load(selectMap);
+                		   treeList.add(raTree);
+                	   }
+             	   }
+                }
+            } else if (stmt instanceof CreateTable) {
+                ArrayList<CreateTable> ctList = new ArrayList<CreateTable>();
+                ctList.add((CreateTable) stmt);
+                queryMap.putAll(qp.parseCreate(ctList));
+            }
+        }
+        //System.out.println(queryMap);
+        String key=null;
+        HashMap <String,TablesO> newTable=new HashMap<>();
+        for (Map.Entry pairs : queryMap.entrySet()) {
+             //System.out.println("\n****************MAP START*****************************");
+            //System.out.println(pairs.getKey() + " = " + pairs.getValue());
+            key=(String)pairs.getKey();
+            //Separate parsed table objects from map
+            if (key.matches("CREATE(.*)")) {
+                newTable= (HashMap<String, TablesO>) pairs.getValue();
+                parsedTables.putAll(newTable);
+            }
+            //System.out.println("\n****************MAP END*****************************");               
+        }
+        
+        //DEBUG print for parsed tables
+        //int count = 0;
+        for (Map.Entry entry : parsedTables.entrySet()) {
+        	 //System.out.println("Parsed Tables"+ ++count);
+            //System.out.println(entry.getKey());
+            TablesO table = (TablesO) entry.getValue();
+            
+            table.setFilePath(fileMap.get(table.getTableName()));
+            //System.out.println(table.getTableName());
+        }
+
+        /*DEBUG print for the tables object
+         These are the functions you can use with the tables objects
+         Parsed tables is a Hash map of the for TableName, TableObject
+         
+         getSchema():: returns the hashmap for schema
+         getFilePath():: returns the filepath
+         
+         
+        for (Map.Entry entry : parsedTables.entrySet()) {
+            //HashMap<String, ColumnDefinition> schema;
+        	ArrayList<ColumnDefinition> schema;
+            //System.out.println("Parsed Tables" + ++count);
+            //System.out.println(entry.getKey());
+            TablesO table = (TablesO) entry.getValue();
+            //System.out.println(table.readLine());
+            schema = table.getSchema();
+            //System.out.println("\nFile Path : : " + table.getFilePath());
+            //System.out.println(schema);
+
+        }
+        
+        */
+        
+        /*Execute the query plan passing 
+        the parsed tables hash map as input 
+        */
+        //System.out.println(treeList.size());
+        for (RATree tree : treeList) {
+        	Operator o = qPlan.trav(tree.getRoot(), parsedTables);
+        	
+            HashMap<String, Expression> tuple = new HashMap<>();
+            //HashMap<String, Expression> tupleTemp = new HashMap<>();
+            ArrayList<ColumnDefinition> outputSchema = null;
+            //ArrayList<HashMap<String,Expression>> tupleList = new ArrayList<>();
+            String flush="";
+	    String out = ""; 
+            
+            while ((tuple = o.getTuple()) != null) {
+                outputSchema=o.getOutputSchema();
+                for(ColumnDefinition cd:outputSchema){
+                    
+		    System.out.println("CD: " + cd);
+		    System.out.println("CN: " + cd.getColumnName());
+                    out=tuple.get(cd.getColumnName()).toString();
+		System.out.println("OUT: " + out);
+                    //System.out.println(out);
+                    if (out.startsWith("'")){
+                        out=out.substring(1, out.lastIndexOf("'"));
+                        
+                    }
+                    
+                    flush=flush.concat(out+"|");
+         
+                }
+                System.out.println(flush.substring(0, flush.lastIndexOf("|")));
+                flush="";
+            }
+        }
+        long end = System.nanoTime();
+        //double queryTime = (double) (end - start) / 1000000000;
+        //System.out.println("\nQuery Time: " + queryTime + " seconds");
+    }
+
+    public void printMap(HashMap<String, HashMap<String, ArrayList<Object>>> map) {
+        HashMap<String, ArrayList<Object>> subMap = null;
+
+        for (String stmt : map.keySet()) {
+            //System.out.println(stmt);
+            subMap = map.get(stmt);
+            for (String key : subMap.keySet()) {
+                //System.out.println("Key" + key);
+            }
+        }
+    }
+
+}

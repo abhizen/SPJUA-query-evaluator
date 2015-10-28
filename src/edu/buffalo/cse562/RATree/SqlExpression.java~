@@ -1,0 +1,50 @@
+package edu.buffalo.cse562.Operators;
+
+import net.sf.jsqlparser.expression.DateValue;
+import net.sf.jsqlparser.expression.DoubleValue;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.LeafValue;
+import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.expression.StringValue;
+import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
+
+public class SqlExpression {
+
+    public static Expression getExpression(ColumnDefinition colDef, String expr) {
+        LeafValue obj = null;
+        //System.out.println(colDef.getColDataType());
+        if (colDef.getColDataType().toString().equalsIgnoreCase("int")) {
+            obj = new LongValue(expr);
+            return (Expression) obj;
+        }
+
+        if (colDef.getColDataType().toString().equalsIgnoreCase("varchar")) {
+            obj = new StringValue(expr);
+            return (Expression) obj;
+        }
+
+        if (colDef.getColDataType().toString().equalsIgnoreCase("char")||colDef.getColDataType().toString().matches("CHAR(.*)")||colDef.getColDataType().toString().matches("char(.*)")) {
+            obj = new StringValue(expr);
+            return (Expression) obj;
+        }
+
+        if (colDef.getColDataType().toString().equalsIgnoreCase("string")) {
+            String strExpr = " " + expr + " ";
+            obj = new StringValue(strExpr);
+            return (Expression) obj;
+        }
+
+        if (colDef.getColDataType().toString().equalsIgnoreCase("decimal")) {
+            obj = new DoubleValue(expr);
+            return (Expression) obj;
+        }
+
+        if (colDef.getColDataType().toString().equalsIgnoreCase("date")) {
+            String dateExpr = " " + expr + " ";
+            obj = new DateValue(dateExpr);
+            return (Expression) obj;
+        }
+
+        return null;
+    }
+}
